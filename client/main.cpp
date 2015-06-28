@@ -147,7 +147,7 @@ int main() {
     while(true){
         cout << "Enter nickname: ";
         getline(cin,user.nick);
-        if(user.nick.size() > 0){
+        if(user.nick.size() > 0 || !(user.nick.size() > 1024)){
             break;
         }else{
             cout << "Wrong nickname" << endl;
@@ -169,6 +169,12 @@ int main() {
     login(&user,host);
         string message;
     while (getline(cin,message)){
+    	if (message.size() > 1024){
+    		cerr << "Your message is too looooooong" << endl;
+    		continue;
+    	}
+
+
         sentToServer(&user,message);
         if (!message.compare("exit")){
             break;
