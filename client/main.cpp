@@ -6,7 +6,7 @@
 #include <arpa/inet.h>
 #include <string.h>
 #include <unistd.h>
-
+#include <ctime>
 using namespace std;
 
 static const int PORT = 20203;
@@ -109,7 +109,25 @@ void *receiver(void *param){
 
 
         if(recvd > 0){
-            cout << package.nick << " : " << package.buff<<endl;
+            time_t t = time(0);
+            tm * now = localtime(&t);
+            cout << '['
+            << "\033[1;32m"
+            << (now->tm_year + 1900) << '/'
+            << (now->tm_mon + 1) << '/'
+            <<  now->tm_mday <<' '
+            << now->tm_hour << ':'
+            << now->tm_min << ':'
+            << now->tm_sec
+            << ']'
+            << ' '
+            << "\033[0m"
+            << "\033[1;33m"
+            << package.nick
+            << "\033[0m : "
+            << "\033[1;36m"
+            << package.buff
+            << "\033[0m"<<endl;
         }
     }
     return NULL;

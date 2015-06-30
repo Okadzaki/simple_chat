@@ -6,44 +6,33 @@
 #include <string.h>
 #include <algorithm>
 #include <unistd.h>
-#include <pthread.h>
+#include "Package.h"
+#include "ThreadInfo.h"
 
 using namespace std;
 
 static const int PORT= 20203;
 static const string HOST = "127.0.0.1";
 static const int MAX_CLIENTS = 10;
-
-
-struct THREADINFO {
-    pthread_t thread_ID;
-    int sockfd;
-    string nick;
-};
-
-struct PACKAGE{
-    char nick[1024];
-    char buff[1024];
-};
-
+void *admin_handler(void *param);
 
 int compare( THREADINFO *a,  THREADINFO *b) {
     return a->sockfd - b->sockfd;
 }
-
+void *admin_handler(void *param);
 
 
 int sockfd, newfd;
-THREADINFO thread_info[10];
 vector<THREADINFO> client_list;
 pthread_mutex_t clientlist_mutex;
 void *client_handler(void *fd);
+
+
 int main(){
     int err_ret, sin_size;
     sockaddr_in serv_addr, client_addr;
     pthread_mutex_init(&clientlist_mutex, NULL);
 
-    /* open a socket */
     if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
         err_ret = errno;
         cerr << "socket() failed..." <<endl;
@@ -60,6 +49,7 @@ int main(){
         cerr << "bind() failed..." <<endl;
         return err_ret;
     }
+    cout << "Starting socket listener.." << endl;
 
     if(listen(sockfd, MAX_CLIENTS) == -1) {
         err_ret = errno;
@@ -68,7 +58,17 @@ int main(){
         return err_ret;
     }
 
-    cout << "Starting socket listener.." << endl;
+    pthread_t admin_thread;
+    cout << "Starting admin console.." << endl;
+    if(pthread_create(&admin_thread, NULL, admin_handler, NULL) != 0) {
+        err_ret = errno;
+        cerr<<"Admin console error";
+        return err_ret;
+    }
+
+
+
+
     while(1) {
         sin_size = sizeof( sockaddr_in);
         if((newfd = accept(sockfd, ( sockaddr *)&client_addr, (socklen_t*)&sin_size)) == -1) {
@@ -81,7 +81,8 @@ int main(){
                 cerr << "Connection full, request rejected..." <<endl;
                 continue;
             }
-            cout << "Connection requested received"<<endl;
+
+            cout << "Connection requested received from " << inet_ntoa(client_addr.sin_addr) <<endl;
             THREADINFO threadinfo;
             threadinfo.sockfd = newfd;
             threadinfo.nick = "Anonymous";
@@ -96,17 +97,19 @@ int main(){
 
 vector<THREADINFO>::iterator findThread(vector<THREADINFO>& vector1,THREADINFO& threadInfo){
 
-    for (auto item = vector1.begin();item != vector1.end();++item){
-        if (compare(&(*item),&threadInfo) == 0){
+    for (auto item = vector1.begin();item != vector1.end();++item)
+        if (compare(&(*item),&threadInfo) == 0)
             return item;
-        }
-    }
+
+
 }
+
+
 
 void *client_handler(void *fd) {
     THREADINFO threadinfo = *(THREADINFO *)fd;
     PACKAGE package;
-    int bytes, sent;
+    int bytes;
     while(1) {
 
         bytes = recv(threadinfo.sockfd, (void *)((char *)&package), 1, 0);
@@ -147,7 +150,7 @@ void *client_handler(void *fd) {
 
 
             for (int j = 0; j< sizeof (PACKAGE);j++)
-                sent = send(client_list[i].sockfd, (void *)((char*)&spacket+j), 1, 0);
+                send(client_list[i].sockfd, (void *)((char*)&spacket+j), 1, 0);
 
         }
         pthread_mutex_unlock(&clientlist_mutex);
@@ -157,5 +160,34 @@ void *client_handler(void *fd) {
     /* clean up */
     close(threadinfo.sockfd);
 
+    return NULL;
+}
+
+
+void *admin_handler(void *param) {
+    string command;
+    while(getline(cin,command)) {
+        if(!command.compare("exit")) {
+            /* clean up */
+            cout << "Server is shutdown. Bye" << endl;
+
+            pthread_mutex_destroy(&clientlist_mutex);
+            close(sockfd);
+            exit(0);
+        }
+        else if(!command.compare("users")) {
+            pthread_mutex_lock(&clientlist_mutex);
+            for (auto it = client_list.begin();it!=client_list.end();++it){
+                sockaddr_in addr;
+                socklen_t addr_size = sizeof( sockaddr_in);
+                int res = getpeername(it->sockfd, ( sockaddr *)&addr, &addr_size);
+                cout << inet_ntoa(addr.sin_addr) << endl;
+            }
+            pthread_mutex_unlock(&clientlist_mutex);
+        }
+        else {
+            cerr << "Unknown command" << endl;
+        }
+    }
     return NULL;
 }
